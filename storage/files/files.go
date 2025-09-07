@@ -2,7 +2,6 @@ package files
 
 import (
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -58,21 +57,32 @@ func (s Storage) PickRandom(userName string) (page *storage.Page, err error) {
 
 	path := filepath.Join(s.basePath, userName)
 
+	// Проверяем существует ли директория
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, storage.ErrNoSavedPages
+	}
+
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(files) == 0 {
+	// Фильтруем только файлы (не директории)
+	var validFiles []os.DirEntry
+	for _, file := range files {
+		if !file.IsDir() {
+			validFiles = append(validFiles, file)
+		}
+	}
+
+	if len(validFiles) == 0 {
 		return nil, storage.ErrNoSavedPages
 	}
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	n := rng.Intn(len(files))
+	n := rng.Intn(len(validFiles))
 
-	file := files[n]
-
-	return s.decodePage(filepath.Join(path, file.Name()))
+	return s.decodePage(filepath.Join(path, validFiles[n].Name()))
 }
 
 func (s Storage) Remove(page *storage.Page) error {
@@ -93,24 +103,29 @@ func (s Storage) Remove(page *storage.Page) error {
 }
 
 func (s Storage) IsExists(page *storage.Page) (bool, error) {
+	// Создаем директорию пользователя если её нет
+	userDir := filepath.Join(s.basePath, page.UserName)
+	if err := os.MkdirAll(userDir, defaultPerm); err != nil {
+		return false, errorr.Wrap("can't create user directory", err)
+	}
+
 	fileName, err := fileName(page)
 	if err != nil {
-		return false, errorr.Wrap("can't remove page", err)
+		return false, errorr.Wrap("can't get file name", err)
 	}
 
-	path := filepath.Join(s.basePath, page.UserName, fileName)
+	path := filepath.Join(userDir, fileName)
 
-	switch _, err = os.Stat(path); {
-	case errors.Is(err, storage.ErrNoSavedPages):
-		return false, nil
-	case err != nil:
-		msg := fmt.Sprintf("can't check if file %s exists", path)
-
-		return false, errorr.Wrap(msg, err)
+	// Правильная проверка существования файла
+	_, err = os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil // Файл не существует
+		}
+		return false, errorr.Wrap("can't check file existence", err)
 	}
 
-	return true, nil
-
+	return true, nil // Файл существует
 }
 
 func (s Storage) decodePage(filePath string) (*storage.Page, error) {
