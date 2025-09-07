@@ -11,23 +11,22 @@ import (
 	"tg-bot/lib/errorr"
 )
 
-type Client struct {  
-	Host string
+type Client struct {
+	Host     string
 	basePath string
-	Client http.Client
+	Client   http.Client
 }
 
 const (
-	getUpdatesMethod = "getUpdates"
+	getUpdatesMethod  = "getUpdates"
 	sendMessageMethod = "sendMessage"
-
 )
 
-func New(host string, token string) Client {  
-	return Client{
-		Host: host,	
+func New(host string, token string) *Client {
+	return &Client{
+		Host:     host,
 		basePath: newBasePath(token),
-		Client: http.Client{},
+		Client:   http.Client{},
 	}
 }
 
@@ -67,13 +66,13 @@ func (c *Client) SendMessage(chatID int, text string) error {
 	return nil
 }
 
-func (c *Client) doRequest(method string, query url.Values) (data []byte, err error) { 
-	defer func() {err = errorr.WrapIfErr("could not do request", err) }()
+func (c *Client) doRequest(method string, query url.Values) (data []byte, err error) {
+	defer func() { err = errorr.WrapIfErr("could not do request", err) }()
 
-	u :=  url.URL{
+	u := url.URL{
 		Scheme: "https",
-		Host: c.Host,
-		Path: path.Join(c.basePath, method),
+		Host:   c.Host,
+		Path:   path.Join(c.basePath, method),
 	}
 
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
@@ -87,8 +86,8 @@ func (c *Client) doRequest(method string, query url.Values) (data []byte, err er
 	if err != nil {
 		return nil, err
 	}
-	defer func() {_=resp.Body.Close()}()
-	
+	defer func() { _ = resp.Body.Close() }()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -96,5 +95,3 @@ func (c *Client) doRequest(method string, query url.Values) (data []byte, err er
 
 	return body, nil
 }
-
-
